@@ -23,7 +23,7 @@ Requisitos: [Node.js 22](https://nodejs.org) o superior y Chrome o Edge.
 2. Descarga el código e instala las dependencias:
 
 ```bash
-git clone https://github.com/sabanez/-traductor-en-vivo.git traductor-en-vivo
+git clone https://github.com/sabanez/traductor-en-vivo.git
 cd traductor-en-vivo
 npm install
 ```
