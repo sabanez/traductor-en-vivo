@@ -129,9 +129,13 @@ button:disabled {
   line-height: 1.4;
 }
 
-.partial {
+.live {
   margin: 0;
+  min-height: 1.4em;
+  line-height: 1.4;
+}
+
+.partial {
   color: var(--muted);
   font-style: italic;
-  min-height: 1.4em;
 }
