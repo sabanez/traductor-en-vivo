@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Traductor en vivo · Ponente</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Traductor en vivo</h1>
+      <p class="subtitle">Vista del ponente (prototipo)</p>
+    </header>
+
+    <section class="controls">
+      <label>
+        Idioma del ponente
+        <select id="source-language"></select>
+      </label>
+      <label class="glossary">
+        Glosario (términos separados por comas)
+        <input id="glossary" type="text" placeholder="Labolife, micro-inmunoterapia, ..." />
+      </label>
+      <button id="toggle" type="button">Empezar</button>
+      <span id="status" class="status">Parado</span>
+      <span id="usage" class="usage"></span>
+    </section>
+
+    <main id="panels" class="panels"></main>
+
+    <script type="module" src="/src/presenter.ts"></script>
+  </body>
+</html>

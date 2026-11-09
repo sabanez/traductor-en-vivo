@@ -1,0 +1,25 @@
+{
+  "name": "traductor-en-vivo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Traducción simultánea de presentaciones internas a partir del micrófono del ponente",
+  "scripts": {
+    "dev": "concurrently -n server,client \"tsx watch server/index.ts\" \"vite\"",
+    "build": "tsc --noEmit && vite build",
+    "start": "NODE_ENV=production tsx server/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "microsoft-cognitiveservices-speech-sdk": "^1.53.0",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.5",
+    "concurrently": "^10.0.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
