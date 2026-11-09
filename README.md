@@ -39,6 +39,15 @@ npm run dev
 
 Para producción: `npm run build` y luego `npm start`, que sirve la web en el puerto `PORT`.
 
+### Publicarlo para pruebas (Render, gratis)
+
+1. Entra en [render.com](https://render.com) con tu cuenta de GitHub.
+2. **New > Blueprint** y elige este repositorio: Render lee `render.yaml`.
+3. Rellena `SONIOX_API_KEY` y `ACCESS_PASSWORD` cuando te las pida.
+4. Al terminar te da una URL `https://….onrender.com`. Al abrirla pide usuario y contraseña: el usuario puede ser cualquiera y la contraseña es `ACCESS_PASSWORD`.
+
+El plan gratuito se duerme tras 15 minutos sin visitas y tarda alrededor de un minuto en despertar. Ábrela un rato antes de la prueba.
+
 ### Probar sin cuenta de Soniox
 
 `npm run dev:mock` arranca un Soniox simulado que devuelve frases de ejemplo. Sirve para comprobar que la página funciona sin gastar saldo.
