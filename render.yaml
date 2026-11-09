@@ -1,0 +1,19 @@
+# Despliegue en Render (plan gratuito): Dashboard > New > Blueprint > este repositorio.
+services:
+  - type: web
+    name: traductor-en-vivo
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SONIOX_REGION
+        value: global
+      - key: SONIOX_API_KEY
+        sync: false
+      - key: ACCESS_PASSWORD
+        sync: false

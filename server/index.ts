@@ -17,6 +17,25 @@ const wsUrl = process.env.SONIOX_WS_URL ?? `wss://stt-rt${regionHost}.soniox.com
 
 const app = express();
 
+// Para la comprobación de salud del hosting; va antes de la contraseña.
+app.get('/healthz', (_req, res) => {
+  res.send('ok');
+});
+
+// Protección provisional hasta tener el inicio de sesión con Google: si ACCESS_PASSWORD
+// está definida, el navegador pide usuario y contraseña (el usuario da igual).
+const { ACCESS_PASSWORD } = process.env;
+if (ACCESS_PASSWORD) {
+  app.use((req, res, next) => {
+    const [scheme, encoded] = (req.headers.authorization ?? '').split(' ');
+    const password = scheme === 'Basic' ? Buffer.from(encoded ?? '', 'base64').toString().split(':').slice(1).join(':') : '';
+    if (password === ACCESS_PASSWORD) return next();
+    res.set('WWW-Authenticate', 'Basic realm="Traductor en vivo", charset="UTF-8"').status(401).send('Acceso restringido');
+  });
+} else if (process.env.NODE_ENV === 'production') {
+  console.warn('ACCESS_PASSWORD no está definida: cualquiera con la URL puede usar tu saldo de Soniox.');
+}
+
 // La clave de Soniox nunca sale del servidor: el navegador recibe una clave temporal
 // que solo sirve para abrir conexiones de transcripción durante unos minutos.
 app.post('/api/session', async (_req, res) => {
