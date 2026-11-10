@@ -1,116 +1,137 @@
-import { LANGUAGES, type Language } from './languages';
+import QRCode from 'qrcode';
+import { ORIGINAL, type PresenterMessage, type ServerToPresenterMessage, type TextUpdate } from '../../shared/protocol';
+import { findLanguage, LANGUAGES } from './languages';
 import { sonioxProvider } from './providers/soniox';
-import type { TextUpdate, TranslationSession } from './providers/types';
+import type { TranslationSession } from './providers/types';
+import { Transcript } from './transcript';
 
 // Para cambiar de proveedor basta con cambiar esta línea.
 const provider = sonioxProvider;
+const AUTO = 'auto';
+const ROOM_STORAGE_KEY = 'traductor-sala';
 
-const sourceGroup = document.querySelector<HTMLElement>('#source-language')!;
-const targetGroup = document.querySelector<HTMLElement>('#target-language')!;
+const sourceSelect = document.querySelector<HTMLSelectElement>('#source-language')!;
+const previewSelect = document.querySelector<HTMLSelectElement>('#preview-language')!;
 const glossaryInput = document.querySelector<HTMLInputElement>('#glossary')!;
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')!;
 const statusLabel = document.querySelector<HTMLSpanElement>('#status')!;
 const statusText = document.querySelector<HTMLSpanElement>('#status-text')!;
 const usageLabel = document.querySelector<HTMLSpanElement>('#usage')!;
+const audienceLabel = document.querySelector<HTMLSpanElement>('#audience')!;
 const panelsContainer = document.querySelector<HTMLElement>('#panels')!;
-
-interface Panel {
-  element: HTMLElement;
-  finals: HTMLElement;
-  current: HTMLElement;
-  partial: HTMLElement;
-}
+const shareLink = document.querySelector<HTMLAnchorElement>('#share-url')!;
+const copyButton = document.querySelector<HTMLButtonElement>('#copy')!;
+const qrButton = document.querySelector<HTMLButtonElement>('#qr')!;
+const qrDialog = document.querySelector<HTMLDialogElement>('#qr-dialog')!;
 
 let session: TranslationSession | null = null;
 let microphone: MediaStream | null = null;
 let usageTimer: number | undefined;
 let startedAt = 0;
-let panels = new Map<string, Panel>();
-let target = LANGUAGES[1];
+let room: { id: string; key: string } | null = null;
+let roomSocket: WebSocket | null = null;
 
-function buildSegments(group: HTMLElement, name: string, languages: Language[], selected: Language, onSelect: (language: Language) => void): void {
-  group.replaceChildren();
-  for (const language of languages) {
-    const option = document.createElement('label');
-    option.className = 'segment';
-    option.title = language.name;
-    const radio = document.createElement('input');
-    radio.type = 'radio';
-    radio.name = name;
-    radio.value = language.code;
-    radio.checked = language.code === selected.code;
-    radio.addEventListener('change', () => onSelect(language));
-    option.append(radio, language.code.toUpperCase());
-    group.append(option);
+// --- Paneles: el original siempre visible y una traducción como vista previa ---
+
+const original = new Transcript('Aquí aparecerá lo que digas.');
+original.setTitle('ORIG', 'Original');
+const translations = new Map(
+  LANGUAGES.map((l) => {
+    const transcript = new Transcript('Aquí aparecerá la traducción.');
+    transcript.setTitle(l.code.toUpperCase(), l.name);
+    return [l.code, transcript] as const;
+  }),
+);
+panelsContainer.append(original.element, ...[...translations.values()].map((t) => t.element));
+
+sourceSelect.add(new Option('Detección automática', AUTO));
+for (const language of LANGUAGES) {
+  sourceSelect.add(new Option(language.name, language.code));
+  previewSelect.add(new Option(language.name, language.code));
+}
+previewSelect.value = 'en';
+
+function showPreview(): void {
+  for (const [code, transcript] of translations) transcript.element.hidden = code !== previewSelect.value;
+}
+previewSelect.addEventListener('change', showPreview);
+showPreview();
+
+// --- Sala: enlace compartido y reparto del texto a los asistentes ---
+
+function loadStoredRoom(): { id?: string; key?: string } {
+  try {
+    return JSON.parse(localStorage.getItem(ROOM_STORAGE_KEY) ?? '{}');
+  } catch {
+    return {};
   }
 }
 
-function selectedSource(): Language {
-  const checked = sourceGroup.querySelector<HTMLInputElement>('input:checked');
-  return LANGUAGES.find((l) => l.code === checked?.value) ?? LANGUAGES[0];
+function shareUrl(id: string): string {
+  // En desarrollo Vite sirve la página de la sala tal cual; en producción la ruta es /s/<id>.
+  return import.meta.env.DEV ? `${location.origin}/sala.html?id=${id}` : `${location.origin}/s/${id}`;
 }
 
-// Se traduce siempre a todos los idiomas (los necesitará la sala de participantes);
-// el selector solo decide cuál se ve, así que cambiarlo es instantáneo y no pierde texto.
-function selectTarget(language: Language): void {
-  target = language;
-  for (const [code, panel] of panels) {
-    if (code !== selectedSource().code) panel.element.hidden = code !== target.code;
+async function setUpRoom(): Promise<void> {
+  const response = await fetch('/api/rooms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(loadStoredRoom()),
+  });
+  room = (await response.json()) as { id: string; key: string };
+  try {
+    localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room));
+  } catch {
+    // Sin almacenamiento la sala dura lo que dure la pestaña.
   }
+  const url = shareUrl(room.id);
+  shareLink.href = url;
+  shareLink.textContent = url.replace(/^https?:\/\//, '');
+  const options = { margin: 0, color: { dark: '#1a1a18', light: '#ffffff' } };
+  qrButton.innerHTML = await QRCode.toString(url, { ...options, type: 'svg' });
+  document.querySelector('#qr-large')!.innerHTML = await QRCode.toString(url, { ...options, type: 'svg' });
+  document.querySelector('#qr-caption')!.textContent = shareLink.textContent;
+  connectRoom();
 }
 
-function selectSource(source: Language): void {
-  const targets = LANGUAGES.filter((l) => l.code !== source.code);
-  if (target.code === source.code) target = targets[0];
-  buildSegments(targetGroup, 'target-language', targets, target, selectTarget);
-  buildPanels(source);
-  selectTarget(target);
+function connectRoom(): void {
+  if (!room) return;
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  roomSocket = new WebSocket(`${protocol}://${location.host}/ws/presenter?id=${room.id}&key=${encodeURIComponent(room.key)}`);
+  roomSocket.onopen = () => sendToRoom({ type: 'status', live: session !== null });
+  roomSocket.onmessage = (event) => {
+    const message = JSON.parse(event.data as string) as ServerToPresenterMessage;
+    if (message.type === 'audience') {
+      audienceLabel.textContent = `${message.count} ${message.count === 1 ? 'asistente' : 'asistentes'}`;
+    }
+  };
+  // Si se corta (por ejemplo, el servidor se reinicia), se vuelve a conectar.
+  roomSocket.onclose = () => window.setTimeout(connectRoom, 2000);
 }
 
-buildSegments(sourceGroup, 'source-language', LANGUAGES, LANGUAGES[0], selectSource);
+function sendToRoom(message: PresenterMessage): void {
+  if (roomSocket?.readyState === WebSocket.OPEN) roomSocket.send(JSON.stringify(message));
+}
 
-function buildPanels(source: Language): void {
-  panelsContainer.replaceChildren();
-  panels = new Map();
-  const ordered = [source, ...LANGUAGES.filter((l) => l.code !== source.code)];
-  for (const language of ordered) {
-    const isOriginal = language.code === source.code;
-    const panel = document.createElement('article');
-    panel.className = 'panel';
-    const title = document.createElement('h2');
-    const code = document.createElement('span');
-    code.className = 'panel-code';
-    code.textContent = language.code.toUpperCase();
-    title.append(code, isOriginal ? `${language.name} · original` : language.name);
-    const finals = document.createElement('div');
-    finals.className = 'finals';
-    const live = document.createElement('p');
-    live.className = 'live';
-    const current = document.createElement('span');
-    const partial = document.createElement('span');
-    partial.className = 'partial';
-    live.append(current, partial);
-    const placeholder = document.createElement('p');
-    placeholder.className = 'placeholder';
-    placeholder.textContent = isOriginal ? 'Aquí aparecerá lo que digas.' : 'Aquí aparecerá la traducción.';
-    panel.append(title, placeholder, finals, live);
-    panelsContainer.append(panel);
-    panels.set(language.code, { element: panel, finals, current, partial });
+copyButton.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(shareLink.href);
+  copyButton.textContent = 'Copiado';
+  window.setTimeout(() => (copyButton.textContent = 'Copiar enlace'), 1500);
+});
+qrButton.addEventListener('click', () => qrDialog.showModal());
+
+// --- Traducción ---
+
+function handleUpdate(update: TextUpdate): void {
+  if (update.language === ORIGINAL) {
+    original.apply(update);
+    sendToRoom({ type: 'update', ...update });
+    // Con el idioma fijado no se traduce a él mismo: sus asistentes reciben el original.
+    if (sourceSelect.value !== AUTO) handleUpdate({ ...update, language: sourceSelect.value });
+    return;
   }
-}
-
-function showUpdate(update: TextUpdate): void {
-  const panel = panels.get(update.language);
-  if (!panel) return;
-  panel.current.textContent += update.finalText;
-  panel.partial.textContent = update.partialText;
-  if (update.endOfSentence && panel.current.textContent.trim()) {
-    const line = document.createElement('p');
-    line.textContent = panel.current.textContent.trim();
-    panel.finals.append(line);
-    panel.finals.scrollTop = panel.finals.scrollHeight;
-    panel.current.textContent = '';
-  }
+  translations.get(update.language)?.apply(update);
+  sendToRoom({ type: 'update', ...update });
 }
 
 function setStatus(text: string, running: boolean): void {
@@ -119,7 +140,7 @@ function setStatus(text: string, running: boolean): void {
   statusLabel.classList.toggle('error', text.startsWith('Error'));
   toggleButton.textContent = running ? 'Detener' : 'Empezar';
   toggleButton.classList.toggle('stop', running);
-  sourceGroup.querySelectorAll('input').forEach((input) => (input.disabled = running));
+  sourceSelect.disabled = running;
   glossaryInput.disabled = running;
 }
 
@@ -129,7 +150,7 @@ function updateUsage(): void {
 }
 
 async function start(): Promise<void> {
-  const source = selectedSource();
+  const source = sourceSelect.value === AUTO ? null : findLanguage(sourceSelect.value)!;
   toggleButton.disabled = true;
   setStatus('Conectando…', true);
 
@@ -137,22 +158,22 @@ async function start(): Promise<void> {
     microphone = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
-    buildPanels(source);
-    selectTarget(target);
     session = await provider.start(
       microphone,
       {
-        sourceLanguage: source.code,
-        targetLanguages: LANGUAGES.filter((l) => l.code !== source.code).map((l) => l.code),
+        sourceLanguage: source?.code ?? null,
+        targetLanguages: LANGUAGES.filter((l) => l.code !== source?.code).map((l) => l.code),
+        expectedLanguages: LANGUAGES.map((l) => l.code),
         glossary: glossaryInput.value.split(',').map((t) => t.trim()).filter(Boolean),
       },
-      showUpdate,
+      handleUpdate,
       (message) => void stop(`Error: ${message}`),
     );
     startedAt = Date.now();
     updateUsage();
     usageTimer = window.setInterval(updateUsage, 5000);
-    setStatus('Escuchando', true);
+    setStatus('En directo', true);
+    sendToRoom({ type: 'status', live: true });
   } catch (error) {
     console.error(error);
     await stop(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -169,10 +190,14 @@ async function stop(message = 'Parado'): Promise<void> {
   microphone?.getTracks().forEach((track) => track.stop());
   microphone = null;
   setStatus(message, false);
+  sendToRoom({ type: 'status', live: false });
 }
 
 toggleButton.addEventListener('click', () => {
   void (session ? stop() : start());
 });
 
-selectSource(LANGUAGES[0]);
+setUpRoom().catch((error) => {
+  console.error(error);
+  shareLink.textContent = 'No se pudo crear la sala';
+});

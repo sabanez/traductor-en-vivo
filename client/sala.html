@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Traductor en vivo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="attendee">
+    <div class="page page-narrow">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Traductor en vivo</span>
+        </div>
+        <span id="status" class="status"><span class="status-dot"></span><span id="status-text">Conectando…</span></span>
+      </header>
+
+      <section class="controls controls-attendee" aria-label="Preferencias">
+        <label class="field field-grow">
+          <span class="field-label">Idioma</span>
+          <select id="language"></select>
+        </label>
+        <button id="audio" class="secondary audio-toggle" type="button" aria-pressed="false">
+          <svg class="icon-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="m16 9 5 6m0-6-5 6" /></svg>
+          <svg class="icon-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></svg>
+          <span id="audio-label">Escuchar</span>
+        </button>
+      </section>
+
+      <main id="panel" class="panels panels-single"></main>
+      <p id="audio-note" class="note" hidden></p>
+    </div>
+
+    <script type="module" src="/src/attendee.ts"></script>
+  </body>
+</html>

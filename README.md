@@ -2,15 +2,17 @@
 
 Traducción simultánea de presentaciones internas. El ponente habla al micrófono y la página muestra en directo la transcripción y su traducción a español, inglés, alemán y francés.
 
-Estado: **paso 1, prototipo del ponente** con [Soniox](https://soniox.com). Todavía no hay sala de participantes, audio traducido ni inicio de sesión con Google.
+Estado: **paso 2, sala de asistentes** con [Soniox](https://soniox.com). Falta el inicio de sesión con la cuenta de Google de la empresa.
 
 ## Cómo funciona
 
-- El navegador del ponente convierte el micrófono a PCM de 16 kHz y lo envía directamente a Soniox.
-- Soniox traduce a un solo idioma por conexión, así que se abren tres (una por idioma destino) con el mismo audio. El texto original sale de la primera.
+- **Ponente** (`/`, protegida con `ACCESS_PASSWORD`): habla al micrófono y ve el original y una traducción de vista previa. El idioma se detecta automáticamente, aunque se puede fijar. Arriba tiene el enlace y el código QR de su sala para compartirlos.
+- **Asistentes** (`/s/<sala>`): entran con el enlace, sin contraseña. Eligen idioma (español, inglés, alemán, francés, catalán o el original) y, si quieren, escuchan la traducción con la voz del navegador. No pueden empezar ni detener nada, y tampoco pueden gastar saldo.
+- El navegador del ponente convierte el micrófono a PCM de 16 kHz y lo envía directamente a Soniox. Como Soniox traduce a un solo idioma por conexión, se abre una por idioma destino. El texto llega al servidor, que lo reparte por WebSocket a los asistentes de la sala y guarda lo dicho para quien entra tarde.
 - El servidor (Node + TypeScript) solo emite claves temporales de 5 minutos, así que la clave de Soniox nunca llega al navegador.
 - El glosario se envía como `context.terms` para que Soniox escriba bien nombres propios y jerga de la empresa.
-- Todo lo específico de Soniox está en `client/src/providers/soniox.ts`. Para cambiar de proveedor hay que escribir otro archivo que cumpla `client/src/providers/types.ts`.
+- Lo específico de Soniox está en `client/src/providers/soniox.ts`. Para cambiar de proveedor hay que escribir otro archivo que cumpla `client/src/providers/types.ts`.
+- Las salas se guardan en memoria: si el servidor se reinicia, el ponente obtiene una sala nueva y hay que volver a compartir el enlace.
 
 ## Instalación de la versión de prueba
 
@@ -35,7 +37,7 @@ npm install
 npm run dev
 ```
 
-5. Abre http://localhost:5173, permite el micrófono, elige el idioma en que vas a hablar y pulsa **Empezar**.
+5. Abre http://localhost:5173, permite el micrófono y pulsa **Empezar**. Abre el enlace de la sala en otra pestaña o en el móvil para verlo como asistente.
 
 Para producción: `npm run build` y luego `npm start`, que sirve la web en el puerto `PORT`.
 
@@ -54,9 +56,9 @@ El plan gratuito se duerme tras 15 minutos sin visitas y tarda alrededor de un m
 
 ## Coste
 
-Unos 0,36–0,54 $ por hora de presentación con tres idiomas destino. No depende del número de asistentes. El contador de la página muestra los minutos consumidos en la sesión.
+Unos 0,60–0,90 $ por hora de presentación con cinco idiomas destino. No depende del número de asistentes, y la voz para los asistentes es gratuita porque la pone su navegador. El contador de la página muestra los minutos consumidos en la sesión.
 
 ## Próximos pasos
 
-- Sala de participantes con WebSockets, selector de idioma y voz sintetizada.
 - Inicio de sesión con la cuenta de Google de la empresa.
+- Valorar la voz de Soniox si la del navegador se queda corta (sobre todo en catalán).

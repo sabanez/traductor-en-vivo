@@ -22,19 +22,29 @@
         </div>
         <div class="session">
           <span id="usage" class="usage"></span>
+          <span id="audience" class="usage"></span>
           <span id="status" class="status"><span class="status-dot"></span><span id="status-text">Parado</span></span>
         </div>
       </header>
 
+      <section class="share" aria-label="Compartir con los asistentes">
+        <button id="qr" class="qr" type="button" title="Mostrar el código QR en grande"></button>
+        <div class="share-text">
+          <span class="field-label">Enlace para los asistentes</span>
+          <a id="share-url" class="share-url" target="_blank" rel="noopener">Creando sala…</a>
+        </div>
+        <button id="copy" class="secondary" type="button">Copiar enlace</button>
+      </section>
+
       <section class="controls" aria-label="Configuración">
-        <div class="field">
-          <span class="field-label" id="source-label">Idioma del ponente</span>
-          <div id="source-language" class="segmented" role="radiogroup" aria-labelledby="source-label"></div>
-        </div>
-        <div class="field">
-          <span class="field-label" id="target-label">Traducción</span>
-          <div id="target-language" class="segmented" role="radiogroup" aria-labelledby="target-label"></div>
-        </div>
+        <label class="field">
+          <span class="field-label">Idioma del ponente</span>
+          <select id="source-language"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">Vista previa</span>
+          <select id="preview-language"></select>
+        </label>
         <label class="field field-grow">
           <span class="field-label">Glosario</span>
           <input id="glossary" type="text" placeholder="Nombres propios y términos, separados por comas" />
@@ -44,6 +54,12 @@
 
       <main id="panels" class="panels"></main>
     </div>
+
+    <dialog id="qr-dialog" class="qr-dialog">
+      <div id="qr-large" class="qr-large"></div>
+      <p id="qr-caption" class="qr-caption"></p>
+      <form method="dialog"><button class="secondary" type="submit">Cerrar</button></form>
+    </dialog>
 
     <script type="module" src="/src/presenter.ts"></script>
   </body>

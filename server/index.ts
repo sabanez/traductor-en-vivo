@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
+import { getOrCreateRoom, handleUpgrade } from './rooms';
 
-const { SONIOX_API_KEY, SONIOX_REGION = 'eu', PORT = '3001' } = process.env;
+const { SONIOX_API_KEY, SONIOX_REGION = 'eu', PORT = '3001', ACCESS_PASSWORD } = process.env;
 
 if (!SONIOX_API_KEY) {
   console.error('Falta SONIOX_API_KEY. Copia .env.example a .env y rellénalo.');
@@ -14,31 +15,34 @@ const regionHost = SONIOX_REGION === 'global' ? '' : `.${SONIOX_REGION}`;
 // SONIOX_API_URL y SONIOX_WS_URL solo se usan para apuntar a un Soniox simulado en las pruebas.
 const apiUrl = process.env.SONIOX_API_URL ?? `https://api${regionHost}.soniox.com`;
 const wsUrl = process.env.SONIOX_WS_URL ?? `wss://stt-rt${regionHost}.soniox.com/transcribe-websocket`;
+const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/public');
 
 const app = express();
+app.use(express.json());
 
 // Para la comprobación de salud del hosting; va antes de la contraseña.
 app.get('/healthz', (_req, res) => {
   res.send('ok');
 });
 
-// Protección provisional hasta tener el inicio de sesión con Google: si ACCESS_PASSWORD
-// está definida, el navegador pide usuario y contraseña (el usuario da igual).
-const { ACCESS_PASSWORD } = process.env;
-if (ACCESS_PASSWORD) {
-  app.use((req, res, next) => {
-    const [scheme, encoded] = (req.headers.authorization ?? '').split(' ');
-    const password = scheme === 'Basic' ? Buffer.from(encoded ?? '', 'base64').toString().split(':').slice(1).join(':') : '';
-    if (password === ACCESS_PASSWORD) return next();
-    res.set('WWW-Authenticate', 'Basic realm="Traductor en vivo", charset="UTF-8"').status(401).send('Acceso restringido');
-  });
-} else if (process.env.NODE_ENV === 'production') {
+// Protección provisional del ponente hasta tener el inicio de sesión con Google: si
+// ACCESS_PASSWORD está definida, el navegador pide usuario y contraseña (el usuario da igual).
+// Los asistentes no la necesitan: entran con el enlace de la sala y no pueden gastar saldo.
+const requirePassword: RequestHandler = (req, res, next) => {
+  if (!ACCESS_PASSWORD) return next();
+  const [scheme, encoded] = (req.headers.authorization ?? '').split(' ');
+  const password = scheme === 'Basic' ? Buffer.from(encoded ?? '', 'base64').toString().split(':').slice(1).join(':') : '';
+  if (password === ACCESS_PASSWORD) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Traductor en vivo", charset="UTF-8"').status(401).send('Acceso restringido');
+};
+
+if (!ACCESS_PASSWORD && process.env.NODE_ENV === 'production') {
   console.warn('ACCESS_PASSWORD no está definida: cualquiera con la URL puede usar tu saldo de Soniox.');
 }
 
 // La clave de Soniox nunca sale del servidor: el navegador recibe una clave temporal
 // que solo sirve para abrir conexiones de transcripción durante unos minutos.
-app.post('/api/session', async (_req, res) => {
+app.post('/api/session', requirePassword, async (_req, res) => {
   try {
     const response = await fetch(`${apiUrl}/v1/auth/temporary-api-key`, {
       method: 'POST',
@@ -54,11 +58,23 @@ app.post('/api/session', async (_req, res) => {
   }
 });
 
+// El ponente recupera su sala (si sigue viva) o crea una nueva.
+app.post('/api/rooms', requirePassword, (req, res) => {
+  const { id, key } = (req.body ?? {}) as { id?: string; key?: string };
+  res.json(getOrCreateRoom(id, key));
+});
+
 if (process.env.NODE_ENV === 'production') {
-  const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/public');
-  app.use(express.static(publicDir));
+  app.get(['/', '/index.html'], requirePassword, (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+  app.get('/s/:id', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'sala.html'));
+  });
+  app.use(express.static(publicDir, { index: false }));
 }
 
-app.listen(Number(PORT), () => {
+const server = app.listen(Number(PORT), () => {
   console.log(`Servidor escuchando en http://localhost:${PORT} (Soniox, región ${SONIOX_REGION})`);
 });
+server.on('upgrade', handleUpgrade);

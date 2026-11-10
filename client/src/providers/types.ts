@@ -1,31 +1,27 @@
+import type { TextUpdate } from '../../../shared/protocol';
+
+export type { TextUpdate };
+
 /**
  * Capa de proveedor: la página del ponente solo conoce esta interfaz, de modo que
  * cambiar de Soniox a otro servicio supone escribir otro archivo en esta carpeta.
  */
 export interface TranslationOptions {
-  /** Código del idioma que habla el ponente (es, en, de, fr). */
-  sourceLanguage: string;
+  /** Código del idioma que habla el ponente, o null para detectarlo automáticamente. */
+  sourceLanguage: string | null;
   /** Idiomas a los que se traduce. */
   targetLanguages: string[];
+  /** Todos los idiomas posibles, para orientar la detección automática. */
+  expectedLanguages: string[];
   /** Nombres propios y jerga que el reconocimiento debe escribir bien. */
   glossary: string[];
-}
-
-export interface TextUpdate {
-  /** Idioma del texto: el original o uno de los destinos. */
-  language: string;
-  /** Texto nuevo ya definitivo, que no volverá a cambiar. */
-  finalText: string;
-  /** Texto provisional actual, que sustituye al anterior. */
-  partialText: string;
-  /** El ponente ha hecho una pausa: la frase actual se puede cerrar. */
-  endOfSentence: boolean;
 }
 
 export interface TranslationSession {
   stop(): Promise<void>;
 }
 
+/** Las actualizaciones del texto original llegan con `language` igual a `original`. */
 export interface TranslationProvider {
   start(
     audio: MediaStream,
