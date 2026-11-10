@@ -4,29 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Traductor en vivo · Ponente</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
+    />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <header>
-      <h1>Traductor en vivo</h1>
-      <p class="subtitle">Vista del ponente (prototipo)</p>
-    </header>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Traductor en vivo</span>
+          <span class="brand-role">Ponente</span>
+        </div>
+        <div class="session">
+          <span id="usage" class="usage"></span>
+          <span id="status" class="status"><span class="status-dot"></span><span id="status-text">Parado</span></span>
+        </div>
+      </header>
 
-    <section class="controls">
-      <label>
-        Idioma del ponente
-        <select id="source-language"></select>
-      </label>
-      <label class="glossary">
-        Glosario (términos separados por comas)
-        <input id="glossary" type="text" placeholder="Labolife, micro-inmunoterapia, ..." />
-      </label>
-      <button id="toggle" type="button">Empezar</button>
-      <span id="status" class="status">Parado</span>
-      <span id="usage" class="usage"></span>
-    </section>
+      <section class="controls" aria-label="Configuración">
+        <div class="field">
+          <span class="field-label" id="source-label">Idioma del ponente</span>
+          <div id="source-language" class="segmented" role="radiogroup" aria-labelledby="source-label"></div>
+        </div>
+        <label class="field field-grow">
+          <span class="field-label">Glosario</span>
+          <input id="glossary" type="text" placeholder="Nombres propios y términos, separados por comas" />
+        </label>
+        <button id="toggle" class="primary" type="button">Empezar</button>
+      </section>
 
-    <main id="panels" class="panels"></main>
+      <main id="panels" class="panels"></main>
+    </div>
 
     <script type="module" src="/src/presenter.ts"></script>
   </body>
