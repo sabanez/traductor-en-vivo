@@ -56,7 +56,7 @@ El plan gratuito se duerme tras 15 minutos sin visitas y tarda alrededor de un m
 
 ## Voz
 
-El servidor genera cada frase con Soniox TTS una sola vez por idioma, y solo si algún asistente tiene el audio activado en ese idioma. Todos los que escuchan el mismo idioma reciben el mismo audio. Solo se generan frases que el ponente ha dicho, así que nadie puede usar el saldo con textos propios.
+El servidor genera cada frase con Soniox TTS una sola vez por idioma, y solo si algún asistente tiene el audio activado en ese idioma. La conexión con Soniox se mantiene abierta mientras hay actividad y el audio llega al asistente a trozos, según se genera, para que empiece a sonar cuanto antes. Todos los que escuchan el mismo idioma reciben el mismo audio. Solo se generan frases que el ponente ha dicho, así que nadie puede usar el saldo con textos propios.
 
 Variables opcionales:
 
