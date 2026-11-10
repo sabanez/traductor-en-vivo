@@ -10,7 +10,7 @@ Estado: **paso 2, sala de asistentes** con [Soniox](https://soniox.com). Falta e
 - **Asistentes** (`/s/<sala>`): entran con el enlace, sin contraseña. Eligen idioma (español, inglés, alemán, francés, catalán o el original) y, si quieren, escuchan la traducción con la voz del navegador. No pueden empezar ni detener nada, y tampoco pueden gastar saldo.
 - El navegador del ponente convierte el micrófono a PCM de 16 kHz y lo envía directamente a Soniox. Como Soniox traduce a un solo idioma por conexión, se abre una por idioma destino. El texto llega al servidor, que lo reparte por WebSocket a los asistentes de la sala y guarda lo dicho para quien entra tarde.
 - El servidor (Node + TypeScript) solo emite claves temporales de 5 minutos, así que la clave de Soniox nunca llega al navegador.
-- El glosario se envía como `context.terms` para que Soniox escriba bien nombres propios y jerga de la empresa.
+- El glosario (un término por línea, con explicación opcional tras «:») se envía a Soniox como `context.terms` para que escriba bien nombres propios y jerga de la empresa. Los asistentes también lo ven, con las explicaciones, desde el botón **Glosario**.
 - Lo específico de Soniox está en `client/src/providers/soniox.ts`. Para cambiar de proveedor hay que escribir otro archivo que cumpla `client/src/providers/types.ts`.
 - Las salas se guardan en memoria: si el servidor se reinicia, el ponente obtiene una sala nueva y hay que volver a compartir el enlace.
 

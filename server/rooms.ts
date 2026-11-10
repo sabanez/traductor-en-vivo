@@ -2,10 +2,12 @@ import { randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { AttendeeMessage, PresenterMessage, ServerToPresenterMessage, TextUpdate } from '../shared/protocol';
+import type { AttendeeMessage, GlossaryEntry, PresenterMessage, ServerToPresenterMessage, TextUpdate } from '../shared/protocol';
 
 // Frases que se guardan por idioma para quien entra tarde a la sala.
 const MAX_LINES = 300;
+// Límite del glosario, para que nadie pueda llenar la memoria del servidor.
+const MAX_GLOSSARY = 200;
 // Una sala sin actividad durante este tiempo se borra.
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -16,6 +18,7 @@ interface Room {
   live: boolean;
   lines: Map<string, string[]>;
   current: Map<string, string>;
+  glossary: GlossaryEntry[];
   presenter: WebSocket | null;
   attendees: Set<WebSocket>;
   lastActivity: number;
@@ -41,6 +44,7 @@ export function getOrCreateRoom(id?: string, key?: string): { id: string; key: s
     live: false,
     lines: new Map(),
     current: new Map(),
+    glossary: [],
     presenter: null,
     attendees: new Set(),
     lastActivity: Date.now(),
@@ -84,6 +88,12 @@ function handlePresenter(room: Room, socket: WebSocket): void {
     if (message.type === 'status') {
       room.live = message.live;
       broadcast(room, { type: 'status', live: room.live });
+    } else if (message.type === 'glossary') {
+      room.glossary = message.entries.slice(0, MAX_GLOSSARY).map((e) => ({
+        term: String(e.term).slice(0, 100),
+        definition: String(e.definition).slice(0, 500),
+      }));
+      broadcast(room, { type: 'glossary', entries: room.glossary });
     } else if (message.type === 'update') {
       const { language, finalText, partialText, endOfSentence } = message;
       const update = { language, finalText, partialText, endOfSentence };
@@ -106,6 +116,7 @@ function handleAttendee(room: Room, socket: WebSocket): void {
     live: room.live,
     lines: Object.fromEntries(room.lines),
     current: Object.fromEntries(room.current),
+    glossary: room.glossary,
   });
   sendAudience(room);
   socket.on('close', () => {

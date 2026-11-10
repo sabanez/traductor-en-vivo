@@ -1,4 +1,4 @@
-import { type AttendeeMessage, ORIGINAL } from '../../shared/protocol';
+import { type AttendeeMessage, type GlossaryEntry, ORIGINAL } from '../../shared/protocol';
 import { findLanguage, LANGUAGES } from './languages';
 import { Transcript } from './transcript';
 
@@ -11,6 +11,10 @@ const audioNote = document.querySelector<HTMLParagraphElement>('#audio-note')!;
 const statusLabel = document.querySelector<HTMLSpanElement>('#status')!;
 const statusText = document.querySelector<HTMLSpanElement>('#status-text')!;
 const panel = document.querySelector<HTMLElement>('#panel')!;
+const glossaryButton = document.querySelector<HTMLButtonElement>('#glossary-open')!;
+const glossaryCount = document.querySelector<HTMLSpanElement>('#glossary-count')!;
+const glossaryDialog = document.querySelector<HTMLDialogElement>('#glossary-dialog')!;
+const glossaryList = document.querySelector<HTMLElement>('#glossary-list')!;
 
 // La sala viene en la ruta (/s/<id>) en producción y como ?id= en desarrollo.
 const roomId = new URLSearchParams(location.search).get('id') ?? location.pathname.split('/').pop() ?? '';
@@ -93,6 +97,28 @@ audioButton.addEventListener('click', () => {
 languageSelect.addEventListener('change', updateAudioNote);
 speechSynthesis.addEventListener('voiceschanged', updateAudioNote);
 
+// --- Glosario del ponente ---
+
+function showGlossary(entries: GlossaryEntry[]): void {
+  glossaryButton.hidden = entries.length === 0;
+  glossaryCount.textContent = String(entries.length);
+  glossaryList.replaceChildren();
+  for (const entry of [...entries].sort((a, b) => a.term.localeCompare(b.term))) {
+    const term = document.createElement('dt');
+    term.textContent = entry.term;
+    const definition = document.createElement('dd');
+    definition.textContent = entry.definition;
+    glossaryList.append(term, definition);
+  }
+  if (entries.length === 0 && glossaryDialog.open) glossaryDialog.close();
+}
+
+glossaryButton.addEventListener('click', () => glossaryDialog.showModal());
+// Un clic fuera del cuadro lo cierra.
+glossaryDialog.addEventListener('click', (event) => {
+  if (event.target === glossaryDialog) glossaryDialog.close();
+});
+
 // --- Conexión con la sala ---
 
 function setStatus(text: string, live: boolean, error = false): void {
@@ -125,7 +151,11 @@ function connect(): void {
         for (const [code, list] of Object.entries(message.lines)) lines.set(code, list);
         for (const [code, text] of Object.entries(message.current)) current.set(code, text);
         showLanguage();
+        showGlossary(message.glossary);
         setStatus(message.live ? 'En directo' : 'En pausa', message.live);
+        break;
+      case 'glossary':
+        showGlossary(message.entries);
         break;
       case 'status':
         setStatus(message.live ? 'En directo' : 'En pausa', message.live);

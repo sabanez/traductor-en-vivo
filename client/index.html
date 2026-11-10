@@ -45,11 +45,12 @@
           <span class="field-label">Vista previa</span>
           <select id="preview-language"></select>
         </label>
-        <label class="field field-grow">
-          <span class="field-label">Glosario</span>
-          <input id="glossary" type="text" placeholder="Nombres propios y términos, separados por comas" />
-        </label>
+        <span class="controls-spacer"></span>
         <button id="toggle" class="primary" type="button">Empezar</button>
+        <label class="field field-full">
+          <span class="field-label">Glosario <span class="field-hint">· un término por línea, con explicación opcional tras «:». Los asistentes lo ven y ayuda a reconocer las palabras.</span></span>
+          <textarea id="glossary" rows="3" placeholder="Labolife: laboratorio que organiza la presentación&#10;micro-inmunoterapia: tratamiento con dosis muy bajas"></textarea>
+        </label>
       </section>
 
       <main id="panels" class="panels"></main>

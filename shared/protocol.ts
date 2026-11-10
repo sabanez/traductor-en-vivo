@@ -14,12 +14,28 @@ export interface TextUpdate {
   endOfSentence: boolean;
 }
 
-export type PresenterMessage = ({ type: 'update' } & TextUpdate) | { type: 'status'; live: boolean };
+/** Término del glosario, con una explicación opcional para los asistentes. */
+export interface GlossaryEntry {
+  term: string;
+  definition: string;
+}
 
-export type AttendeeMessage =
-  | { type: 'snapshot'; live: boolean; lines: Record<string, string[]>; current: Record<string, string> }
+export type PresenterMessage =
   | ({ type: 'update' } & TextUpdate)
   | { type: 'status'; live: boolean }
+  | { type: 'glossary'; entries: GlossaryEntry[] };
+
+export type AttendeeMessage =
+  | {
+      type: 'snapshot';
+      live: boolean;
+      lines: Record<string, string[]>;
+      current: Record<string, string>;
+      glossary: GlossaryEntry[];
+    }
+  | ({ type: 'update' } & TextUpdate)
+  | { type: 'status'; live: boolean }
+  | { type: 'glossary'; entries: GlossaryEntry[] }
   | { type: 'not-found' };
 
 export type ServerToPresenterMessage = { type: 'audience'; count: number };

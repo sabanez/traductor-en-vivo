@@ -21,6 +21,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -146,6 +150,19 @@ body {
   flex: 1 1 280px;
 }
 
+.field-full {
+  flex: 1 1 100%;
+}
+
+.controls-spacer {
+  flex: 1;
+}
+
+.field-hint {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
 .field-label {
   font-size: 12px;
   font-weight: 500;
@@ -153,6 +170,7 @@ body {
 }
 
 input[type='text'],
+textarea,
 select {
   font: inherit;
   font-size: 14px;
@@ -165,7 +183,8 @@ select {
   transition: border-color 0.15s;
 }
 
-input[type='text']::placeholder {
+input[type='text']::placeholder,
+textarea::placeholder {
   color: var(--text-faint);
 }
 
@@ -179,7 +198,15 @@ select {
   background-position: right 12px center;
 }
 
+textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 input[type='text']:focus,
+textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--text);
@@ -345,7 +372,7 @@ select:disabled {
 
 .panels-single .finals {
   max-height: none;
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
@@ -461,6 +488,73 @@ select:disabled {
   color: #fff;
 }
 
+.badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.glossary-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+  border: none;
+  border-radius: 18px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.glossary-dialog::backdrop {
+  background: rgb(26 26 24 / 0.45);
+}
+
+.glossary-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.glossary-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.glossary-header form {
+  margin: 0;
+}
+
+.glossary-list {
+  margin: 0;
+  padding: 8px 20px 20px;
+}
+
+.glossary-list dt {
+  margin-top: 14px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.glossary-list dd {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.glossary-list dd:empty {
+  display: none;
+}
+
 .note {
   margin: 12px 4px 0;
   font-size: 13px;
@@ -488,17 +582,15 @@ select:disabled {
   }
 
   .controls-attendee {
-    flex-wrap: nowrap;
+    gap: 10px;
   }
 
   .controls-attendee .field-grow {
-    flex: 1 1 auto;
-    min-width: 0;
+    flex: 1 1 100%;
   }
 
-  .controls-attendee select {
-    min-width: 0;
-    width: 100%;
+  .controls-attendee .secondary {
+    flex: 1;
   }
 
   .panels-single .finals,

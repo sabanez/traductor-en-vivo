@@ -3,16 +3,18 @@ import { ORIGINAL, type PresenterMessage, type ServerToPresenterMessage, type Te
 import { findLanguage, LANGUAGES } from './languages';
 import { sonioxProvider } from './providers/soniox';
 import type { TranslationSession } from './providers/types';
+import { parseGlossary } from './glossary';
 import { Transcript } from './transcript';
 
 // Para cambiar de proveedor basta con cambiar esta línea.
 const provider = sonioxProvider;
 const AUTO = 'auto';
 const ROOM_STORAGE_KEY = 'traductor-sala';
+const GLOSSARY_STORAGE_KEY = 'traductor-glosario';
 
 const sourceSelect = document.querySelector<HTMLSelectElement>('#source-language')!;
 const previewSelect = document.querySelector<HTMLSelectElement>('#preview-language')!;
-const glossaryInput = document.querySelector<HTMLInputElement>('#glossary')!;
+const glossaryInput = document.querySelector<HTMLTextAreaElement>('#glossary')!;
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')!;
 const statusLabel = document.querySelector<HTMLSpanElement>('#status')!;
 const statusText = document.querySelector<HTMLSpanElement>('#status-text')!;
@@ -98,7 +100,10 @@ function connectRoom(): void {
   if (!room) return;
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
   roomSocket = new WebSocket(`${protocol}://${location.host}/ws/presenter?id=${room.id}&key=${encodeURIComponent(room.key)}`);
-  roomSocket.onopen = () => sendToRoom({ type: 'status', live: session !== null });
+  roomSocket.onopen = () => {
+    sendToRoom({ type: 'status', live: session !== null });
+    sendGlossary();
+  };
   roomSocket.onmessage = (event) => {
     const message = JSON.parse(event.data as string) as ServerToPresenterMessage;
     if (message.type === 'audience') {
@@ -112,6 +117,31 @@ function connectRoom(): void {
 function sendToRoom(message: PresenterMessage): void {
   if (roomSocket?.readyState === WebSocket.OPEN) roomSocket.send(JSON.stringify(message));
 }
+
+// --- Glosario: se comparte con los asistentes en cuanto se escribe ---
+
+try {
+  glossaryInput.value = localStorage.getItem(GLOSSARY_STORAGE_KEY) ?? '';
+} catch {
+  // Sin almacenamiento el glosario empieza vacío.
+}
+
+function sendGlossary(): void {
+  sendToRoom({ type: 'glossary', entries: parseGlossary(glossaryInput.value) });
+}
+
+let glossaryTimer: number | undefined;
+glossaryInput.addEventListener('input', () => {
+  window.clearTimeout(glossaryTimer);
+  glossaryTimer = window.setTimeout(() => {
+    sendGlossary();
+    try {
+      localStorage.setItem(GLOSSARY_STORAGE_KEY, glossaryInput.value);
+    } catch {
+      // No pasa nada si no se puede recordar.
+    }
+  }, 600);
+});
 
 copyButton.addEventListener('click', async () => {
   await navigator.clipboard.writeText(shareLink.href);
@@ -141,7 +171,6 @@ function setStatus(text: string, running: boolean): void {
   toggleButton.textContent = running ? 'Detener' : 'Empezar';
   toggleButton.classList.toggle('stop', running);
   sourceSelect.disabled = running;
-  glossaryInput.disabled = running;
 }
 
 function updateUsage(): void {
@@ -164,7 +193,7 @@ async function start(): Promise<void> {
         sourceLanguage: source?.code ?? null,
         targetLanguages: LANGUAGES.filter((l) => l.code !== source?.code).map((l) => l.code),
         expectedLanguages: LANGUAGES.map((l) => l.code),
-        glossary: glossaryInput.value.split(',').map((t) => t.trim()).filter(Boolean),
+        glossary: parseGlossary(glossaryInput.value).map((entry) => entry.term),
       },
       handleUpdate,
       (message) => void stop(`Error: ${message}`),

@@ -27,6 +27,9 @@
           <span class="field-label">Idioma</span>
           <select id="language"></select>
         </label>
+        <button id="glossary-open" class="secondary" type="button" hidden>
+          Glosario <span id="glossary-count" class="badge"></span>
+        </button>
         <button id="audio" class="secondary audio-toggle" type="button" aria-pressed="false">
           <svg class="icon-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="m16 9 5 6m0-6-5 6" /></svg>
           <svg class="icon-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></svg>
@@ -37,6 +40,14 @@
       <main id="panel" class="panels panels-single"></main>
       <p id="audio-note" class="note" hidden></p>
     </div>
+
+    <dialog id="glossary-dialog" class="glossary-dialog" aria-labelledby="glossary-title">
+      <header class="glossary-header">
+        <h2 id="glossary-title">Glosario</h2>
+        <form method="dialog"><button class="secondary" type="submit">Cerrar</button></form>
+      </header>
+      <dl id="glossary-list" class="glossary-list"></dl>
+    </dialog>
 
     <script type="module" src="/src/attendee.ts"></script>
   </body>
