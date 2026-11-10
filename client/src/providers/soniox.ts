@@ -1,3 +1,4 @@
+import { ORIGINAL } from '../../../shared/protocol';
 import type { TextUpdate, TranslationOptions, TranslationProvider, TranslationSession } from './types';
 
 const MODEL = 'stt-rt-v6';
@@ -11,6 +12,7 @@ interface SonioxToken {
   text: string;
   is_final: boolean;
   translation_status?: 'none' | 'original' | 'translation';
+  language?: string;
 }
 
 interface SonioxResponse {
@@ -44,7 +46,9 @@ function openSocket(session: Session, options: TranslationOptions, targetLanguag
           audio_format: 'pcm_s16le',
           sample_rate: SAMPLE_RATE,
           num_channels: 1,
-          language_hints: [options.sourceLanguage],
+          // Sin idioma fijo, las pistas orientan la detección sin limitarla.
+          language_hints: options.sourceLanguage ? [options.sourceLanguage] : options.expectedLanguages,
+          enable_language_identification: true,
           enable_endpoint_detection: true,
           context: options.glossary.length > 0 ? { terms: options.glossary } : undefined,
           translation: { type: 'one_way', target_language: targetLanguage },
@@ -74,7 +78,7 @@ export const sonioxProvider: TranslationProvider = {
           onError(`Soniox (${response.error_code}): ${response.error_message ?? 'error desconocido'}`);
           return;
         }
-        emitUpdates(response.tokens, target, includeOriginal ? options.sourceLanguage : null, onUpdate);
+        emitUpdates(response.tokens, target, includeOriginal, onUpdate);
       };
     });
 
@@ -106,14 +110,16 @@ export const sonioxProvider: TranslationProvider = {
 function emitUpdates(
   tokens: SonioxToken[],
   targetLanguage: string,
-  sourceLanguage: string | null,
+  includeOriginal: boolean,
   onUpdate: (update: TextUpdate) => void,
 ): void {
-  const groups: { language: string; tokens: SonioxToken[] }[] = [
-    { language: targetLanguage, tokens: tokens.filter((t) => t.translation_status === 'translation') },
-  ];
-  if (sourceLanguage) {
-    groups.push({ language: sourceLanguage, tokens: tokens.filter((t) => t.translation_status !== 'translation') });
+  // Lo que el ponente ya dice en el idioma destino no se traduce: Soniox lo marca como
+  // "none" con ese idioma, así que también va al panel de ese idioma.
+  const isTarget = (t: SonioxToken) =>
+    t.translation_status === 'translation' || (t.translation_status === 'none' && t.language === targetLanguage);
+  const groups: { language: string; tokens: SonioxToken[] }[] = [{ language: targetLanguage, tokens: tokens.filter(isTarget) }];
+  if (includeOriginal) {
+    groups.push({ language: ORIGINAL, tokens: tokens.filter((t) => t.translation_status !== 'translation') });
   }
 
   for (const group of groups) {

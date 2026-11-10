@@ -18,6 +18,7 @@ const SENTENCES: Record<string, string[]> = {
   en: ['Good morning everyone and thank you for coming.', "Today we'll review the quarterly results.", "Let's start with sales in Europe."],
   de: ['Guten Morgen allerseits und danke fürs Kommen.', 'Heute besprechen wir die Quartalsergebnisse.', 'Wir beginnen mit dem Umsatz in Europa.'],
   fr: ['Bonjour à tous et merci d’être venus.', "Aujourd'hui, nous passerons en revue les résultats du trimestre.", 'Commençons par les ventes en Europe.'],
+  ca: ['Bon dia a tothom i gràcies per venir.', 'Avui repassarem els resultats del trimestre.', 'Comencem per les vendes a Europa.'],
 };
 
 const wss = new WebSocketServer({ server, path: '/transcribe-websocket' });
@@ -47,17 +48,29 @@ wss.on('connection', (socket, req) => {
     console.log('config:', text);
     timer = setInterval(() => {
       const original = SENTENCES.original[count % 3];
-      const translated = (SENTENCES[target] ?? SENTENCES.en)[count % 3];
       count += 1;
-      socket.send(JSON.stringify({ tokens: [{ text: original.slice(0, 18), is_final: false, translation_status: 'original' }] }));
+      // El ponente habla en español: hacia el español no hay traducción y Soniox lo marca como "none".
+      if (target === 'es') {
+        socket.send(
+          JSON.stringify({
+            tokens: [
+              { text: original + ' ', is_final: true, translation_status: 'none', language: 'es' },
+              { text: '<end>', is_final: true },
+              { text: 'Y ahora vamos a', is_final: false, translation_status: 'none', language: 'es' },
+            ],
+          }),
+        );
+        return;
+      }
+      const translated = (SENTENCES[target] ?? SENTENCES.en)[(count - 1) % 3];
       socket.send(
         JSON.stringify({
           tokens: [
-            { text: original + ' ', is_final: true, translation_status: 'original' },
-            { text: translated + ' ', is_final: true, translation_status: 'translation' },
+            { text: original + ' ', is_final: true, translation_status: 'original', language: 'es' },
+            { text: translated + ' ', is_final: true, translation_status: 'translation', language: target },
             { text: '<end>', is_final: true },
-            { text: 'Y ahora vamos a', is_final: false, translation_status: 'original' },
-            { text: 'And now we', is_final: false, translation_status: 'translation' },
+            { text: 'Y ahora vamos a', is_final: false, translation_status: 'original', language: 'es' },
+            { text: '…', is_final: false, translation_status: 'translation', language: target },
           ],
         }),
       );
