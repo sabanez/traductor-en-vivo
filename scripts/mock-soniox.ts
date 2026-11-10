@@ -21,7 +21,62 @@ const SENTENCES: Record<string, string[]> = {
   ca: ['Bon dia a tothom i gràcies per venir.', 'Avui repassarem els resultats del trimestre.', 'Comencem per les vendes a Europa.'],
 };
 
-const wss = new WebSocketServer({ server, path: '/transcribe-websocket' });
+const wss = new WebSocketServer({ noServer: true });
+const ttsWss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const target = req.url === '/tts-websocket' ? ttsWss : req.url === '/transcribe-websocket' ? wss : null;
+  if (!target) return socket.destroy();
+  target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
+});
+
+/** WAV con un tono corto: hace de voz generada (su duración crece con el texto). */
+function toneWav(text: string): Buffer {
+  const rate = 24000;
+  const samples = Math.min(rate * 3, Math.round(rate * 0.04 * text.length));
+  const data = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i++) {
+    const fade = Math.min(1, i / 600, (samples - i) / 600);
+    data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 6000 * fade), i * 2);
+  }
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
+ttsWss.on('connection', (socket, req) => {
+  if (req.headers.authorization !== 'Bearer mock') {
+    socket.send(JSON.stringify({ error_code: 401, error_type: 'unauthenticated', error_message: 'Bad key' }));
+    socket.close();
+    return;
+  }
+  let config: { stream_id: string; language: string; voice: string } | undefined;
+  socket.on('message', (data) => {
+    const message = JSON.parse(data.toString());
+    if (!config) {
+      config = message;
+      return;
+    }
+    console.log(`voz ${config.voice} (${config.language}): ${message.text}`);
+    const wav = toneWav(message.text);
+    const half = Math.floor(wav.length / 2);
+    for (const [part, end] of [[wav.subarray(0, half), false], [wav.subarray(half), true]] as const) {
+      socket.send(JSON.stringify({ audio: part.toString('base64'), audio_end: end, stream_id: config.stream_id }));
+    }
+    socket.send(JSON.stringify({ terminated: true, stream_id: config.stream_id }));
+  });
+});
 
 wss.on('connection', (socket, req) => {
   console.log('conexión, subprotocolos:', req.headers['sec-websocket-protocol']);
