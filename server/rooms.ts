@@ -10,6 +10,9 @@ const MAX_LINES = 300;
 const MAX_GLOSSARY = 200;
 // Una sala sin actividad durante este tiempo se borra.
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
+// Frases recientes que se pueden pedir en audio y audios guardados por sala.
+const SPEAKABLE_LINES = 30;
+const MAX_AUDIO_CACHE = 60;
 const ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 
 interface Room {
@@ -21,6 +24,8 @@ interface Room {
   glossary: GlossaryEntry[];
   presenter: WebSocket | null;
   attendees: Set<WebSocket>;
+  /** Audio ya generado (o en curso) por idioma y frase, compartido entre asistentes. */
+  audio: Map<string, Promise<Buffer>>;
   lastActivity: number;
 }
 
@@ -47,6 +52,7 @@ export function getOrCreateRoom(id?: string, key?: string): { id: string; key: s
     glossary: [],
     presenter: null,
     attendees: new Set(),
+    audio: new Map(),
     lastActivity: Date.now(),
   };
   rooms.set(room.id, room);
@@ -123,6 +129,30 @@ function handleAttendee(room: Room, socket: WebSocket): void {
     room.attendees.delete(socket);
     sendAudience(room);
   });
+}
+
+/**
+ * Audio de una frase de la sala. Solo se generan frases que el ponente ha dicho de verdad,
+ * para que nadie pueda usar el saldo de Soniox con textos propios.
+ */
+export function roomAudio(
+  roomId: string,
+  language: string,
+  text: string,
+  generate: () => Promise<Buffer>,
+): Promise<Buffer> | null {
+  const room = rooms.get(roomId);
+  if (!room || !(room.lines.get(language) ?? []).slice(-SPEAKABLE_LINES).includes(text)) return null;
+  const cacheKey = `${language}\n${text}`;
+  let audio = room.audio.get(cacheKey);
+  if (!audio) {
+    audio = generate();
+    // Si falla se olvida, para que otro asistente pueda volver a intentarlo.
+    audio.catch(() => room.audio.delete(cacheKey));
+    room.audio.set(cacheKey, audio);
+    if (room.audio.size > MAX_AUDIO_CACHE) room.audio.delete(room.audio.keys().next().value!);
+  }
+  return audio;
 }
 
 const wss = new WebSocketServer({ noServer: true });

@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "mock": "tsx scripts/mock-soniox.ts",
-    "dev:mock": "SONIOX_API_KEY=mock SONIOX_API_URL=http://localhost:4000 SONIOX_WS_URL=ws://localhost:4000/transcribe-websocket concurrently -n mock,server,client \"tsx scripts/mock-soniox.ts\" \"tsx watch server/index.ts\" \"vite\""
+    "dev:mock": "SONIOX_API_KEY=mock SONIOX_API_URL=http://localhost:4000 SONIOX_WS_URL=ws://localhost:4000/transcribe-websocket SONIOX_TTS_WS_URL=ws://localhost:4000/tts-websocket concurrently -n mock,server,client \"tsx scripts/mock-soniox.ts\" \"tsx watch server/index.ts\" \"vite\""
   },
   "dependencies": {
     "dotenv": "^18.0.9",

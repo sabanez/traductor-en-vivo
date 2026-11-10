@@ -47,7 +47,7 @@ function showLanguage(): void {
   const language = findLanguage(code);
   transcript.setTitle(language ? code.toUpperCase() : 'ORIG', language ? language.name : 'Original');
   transcript.reset(lines.get(code), current.get(code));
-  speechSynthesis.cancel();
+  stopAudio();
   document.documentElement.lang = language ? code : 'es';
 }
 
@@ -60,30 +60,113 @@ languageSelect.addEventListener('change', () => {
   showLanguage();
 });
 
-// --- Audio: lectura en voz alta con la voz del navegador ---
+// --- Audio: voz natural de Soniox, con la voz del navegador como reserva ---
+
+// Si la voz de Soniox falla varias veces seguidas se pasa a la del navegador.
+const MAX_FAILURES = 3;
+let audioContext: AudioContext | null = null;
+let soniox = true;
+let failures = 0;
+// Frases pedidas en orden; se reproducen en ese orden aunque lleguen desordenadas.
+let queue: Array<Promise<AudioBuffer | null>> = [];
+let playing = false;
+let currentSource: AudioBufferSourceNode | null = null;
 
 function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
-  const voices = speechSynthesis.getVoices();
-  return voices.find((v) => v.lang === lang) ?? voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
+  const voices = speechSynthesis.getVoices().filter((v) => v.lang.replace('_', '-').startsWith(lang.slice(0, 2)));
+  // Las voces "Natural", "Online" o de Google suenan bastante mejor que las del sistema.
+  const better = (v: SpeechSynthesisVoice) => /natural|online|google|premium|enhanced/i.test(v.name);
+  return (
+    voices.find((v) => v.lang === lang && better(v)) ??
+    voices.find(better) ??
+    voices.find((v) => v.lang === lang) ??
+    voices[0]
+  );
 }
 
-function speak(sentence: string): void {
-  const language = findLanguage(languageSelect.value);
-  if (!audioOn || !language) return;
+function speakWithBrowser(sentence: string, lang: string): void {
   // Si la voz se queda atrás respecto al ponente, se salta lo pendiente y se lee lo último.
   if (speechSynthesis.pending) speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(sentence);
-  utterance.lang = language.voice;
-  const voice = pickVoice(language.voice);
+  utterance.lang = lang;
+  const voice = pickVoice(lang);
   if (voice) utterance.voice = voice;
   speechSynthesis.speak(utterance);
 }
 
+async function fetchAudio(code: string, sentence: string): Promise<AudioBuffer | null> {
+  try {
+    const response = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room: roomId, language: code, text: sentence }),
+    });
+    if (response.status === 503 && (await response.clone().text()).includes('desactivada')) soniox = false;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const buffer = await audioContext!.decodeAudioData(await response.arrayBuffer());
+    failures = 0;
+    return buffer;
+  } catch (error) {
+    console.warn('Voz de Soniox no disponible:', error);
+    failures += 1;
+    if (failures >= MAX_FAILURES) {
+      soniox = false;
+      updateAudioNote();
+    }
+    return null;
+  }
+}
+
+async function playQueue(): Promise<void> {
+  if (playing) return;
+  playing = true;
+  while (queue.length > 0 && audioOn) {
+    // Si hay más de dos frases esperando, el audio va atrasado: se salta a las últimas.
+    if (queue.length > 2) queue = queue.slice(-2);
+    const buffer = await queue.shift()!;
+    if (!buffer || !audioOn || !audioContext) continue;
+    await new Promise<void>((resolve) => {
+      const source = audioContext!.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext!.destination);
+      source.onended = () => resolve();
+      currentSource = source;
+      source.start();
+    });
+    currentSource = null;
+  }
+  playing = false;
+}
+
+function stopAudio(): void {
+  queue = [];
+  currentSource?.stop();
+  currentSource = null;
+  speechSynthesis.cancel();
+}
+
+function speak(sentence: string): void {
+  const code = languageSelect.value;
+  const language = findLanguage(code);
+  if (!audioOn || !language) return;
+  if (soniox && audioContext) {
+    queue.push(fetchAudio(code, sentence));
+    void playQueue();
+  } else {
+    speakWithBrowser(sentence, language.voice);
+  }
+}
+
 function updateAudioNote(): void {
   const language = findLanguage(languageSelect.value);
-  const missingVoice = audioOn && language && speechSynthesis.getVoices().length > 0 && !pickVoice(language.voice);
-  audioNote.hidden = !missingVoice;
-  audioNote.textContent = missingVoice ? `Este dispositivo no tiene voz en ${language.name}: se usará la voz por defecto.` : '';
+  const browserVoice = audioOn && language && !soniox;
+  const missingVoice = browserVoice && speechSynthesis.getVoices().length > 0 && !pickVoice(language.voice);
+  audioNote.hidden = !browserVoice;
+  audioNote.textContent = !browserVoice
+    ? ''
+    : missingVoice
+      ? `La voz natural no está disponible y este dispositivo no tiene voz en ${language.name}.`
+      : 'La voz natural no está disponible: se usa la voz del dispositivo.';
 }
 
 audioButton.addEventListener('click', () => {
@@ -91,7 +174,13 @@ audioButton.addEventListener('click', () => {
   audioButton.setAttribute('aria-pressed', String(audioOn));
   audioButton.classList.toggle('on', audioOn);
   audioLabel.textContent = audioOn ? 'Silenciar' : 'Escuchar';
-  if (!audioOn) speechSynthesis.cancel();
+  // El navegador solo deja reproducir audio después de un clic: se prepara aquí.
+  if (audioOn) {
+    audioContext ??= new AudioContext();
+    void audioContext.resume();
+  } else {
+    stopAudio();
+  }
   updateAudioNote();
 });
 languageSelect.addEventListener('change', updateAudioNote);
