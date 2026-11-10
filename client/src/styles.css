@@ -252,23 +252,22 @@ input[type='text']:disabled {
 
 .panels {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+}
+
+.panel[hidden] {
+  display: none;
 }
 
 .panel {
   display: flex;
   flex-direction: column;
-  min-height: 240px;
+  min-height: 360px;
   padding: 18px 20px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-}
-
-.panel-original {
-  grid-column: 1 / -1;
-  min-height: 200px;
 }
 
 .panel h2 {
@@ -293,15 +292,10 @@ input[type='text']:disabled {
 
 .finals {
   overflow-y: auto;
-  max-height: 42vh;
+  max-height: 60vh;
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 21px;
   line-height: 1.5;
-}
-
-.panel-original .finals,
-.panel-original .live {
-  font-size: 22px;
 }
 
 .finals p {
@@ -317,7 +311,7 @@ input[type='text']:disabled {
 .live {
   margin: 0;
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 21px;
   line-height: 1.5;
   color: var(--text);
 }

@@ -6,6 +6,7 @@ import type { TextUpdate, TranslationSession } from './providers/types';
 const provider = sonioxProvider;
 
 const sourceGroup = document.querySelector<HTMLElement>('#source-language')!;
+const targetGroup = document.querySelector<HTMLElement>('#target-language')!;
 const glossaryInput = document.querySelector<HTMLInputElement>('#glossary')!;
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')!;
 const statusLabel = document.querySelector<HTMLSpanElement>('#status')!;
@@ -14,6 +15,7 @@ const usageLabel = document.querySelector<HTMLSpanElement>('#usage')!;
 const panelsContainer = document.querySelector<HTMLElement>('#panels')!;
 
 interface Panel {
+  element: HTMLElement;
   finals: HTMLElement;
   current: HTMLElement;
   partial: HTMLElement;
@@ -24,25 +26,48 @@ let microphone: MediaStream | null = null;
 let usageTimer: number | undefined;
 let startedAt = 0;
 let panels = new Map<string, Panel>();
+let target = LANGUAGES[1];
 
-for (const [index, language] of LANGUAGES.entries()) {
-  const option = document.createElement('label');
-  option.className = 'segment';
-  const radio = document.createElement('input');
-  radio.type = 'radio';
-  radio.name = 'source-language';
-  radio.value = language.code;
-  radio.checked = index === 0;
-  radio.addEventListener('change', () => buildPanels(language));
-  option.append(radio, language.code.toUpperCase());
-  option.title = language.name;
-  sourceGroup.append(option);
+function buildSegments(group: HTMLElement, name: string, languages: Language[], selected: Language, onSelect: (language: Language) => void): void {
+  group.replaceChildren();
+  for (const language of languages) {
+    const option = document.createElement('label');
+    option.className = 'segment';
+    option.title = language.name;
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = name;
+    radio.value = language.code;
+    radio.checked = language.code === selected.code;
+    radio.addEventListener('change', () => onSelect(language));
+    option.append(radio, language.code.toUpperCase());
+    group.append(option);
+  }
 }
 
 function selectedSource(): Language {
   const checked = sourceGroup.querySelector<HTMLInputElement>('input:checked');
   return LANGUAGES.find((l) => l.code === checked?.value) ?? LANGUAGES[0];
 }
+
+// Se traduce siempre a todos los idiomas (los necesitará la sala de participantes);
+// el selector solo decide cuál se ve, así que cambiarlo es instantáneo y no pierde texto.
+function selectTarget(language: Language): void {
+  target = language;
+  for (const [code, panel] of panels) {
+    if (code !== selectedSource().code) panel.element.hidden = code !== target.code;
+  }
+}
+
+function selectSource(source: Language): void {
+  const targets = LANGUAGES.filter((l) => l.code !== source.code);
+  if (target.code === source.code) target = targets[0];
+  buildSegments(targetGroup, 'target-language', targets, target, selectTarget);
+  buildPanels(source);
+  selectTarget(target);
+}
+
+buildSegments(sourceGroup, 'source-language', LANGUAGES, LANGUAGES[0], selectSource);
 
 function buildPanels(source: Language): void {
   panelsContainer.replaceChildren();
@@ -51,7 +76,7 @@ function buildPanels(source: Language): void {
   for (const language of ordered) {
     const isOriginal = language.code === source.code;
     const panel = document.createElement('article');
-    panel.className = isOriginal ? 'panel panel-original' : 'panel';
+    panel.className = 'panel';
     const title = document.createElement('h2');
     const code = document.createElement('span');
     code.className = 'panel-code';
@@ -70,7 +95,7 @@ function buildPanels(source: Language): void {
     placeholder.textContent = isOriginal ? 'Aquí aparecerá lo que digas.' : 'Aquí aparecerá la traducción.';
     panel.append(title, placeholder, finals, live);
     panelsContainer.append(panel);
-    panels.set(language.code, { finals, current, partial });
+    panels.set(language.code, { element: panel, finals, current, partial });
   }
 }
 
@@ -113,6 +138,7 @@ async function start(): Promise<void> {
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
     buildPanels(source);
+    selectTarget(target);
     session = await provider.start(
       microphone,
       {
@@ -149,4 +175,4 @@ toggleButton.addEventListener('click', () => {
   void (session ? stop() : start());
 });
 
-buildPanels(LANGUAGES[0]);
+selectSource(LANGUAGES[0]);
