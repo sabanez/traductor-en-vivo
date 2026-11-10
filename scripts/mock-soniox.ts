@@ -13,6 +13,13 @@ const server = createServer((req, res) => {
   res.writeHead(404).end();
 });
 
+const SENTENCES: Record<string, string[]> = {
+  original: ['Buenos días a todos y gracias por venir.', 'Hoy repasaremos los resultados del trimestre.', 'Empezamos por las ventas en Europa.'],
+  en: ['Good morning everyone and thank you for coming.', "Today we'll review the quarterly results.", "Let's start with sales in Europe."],
+  de: ['Guten Morgen allerseits und danke fürs Kommen.', 'Heute besprechen wir die Quartalsergebnisse.', 'Wir beginnen mit dem Umsatz in Europa.'],
+  fr: ['Bonjour à tous et merci d’être venus.', "Aujourd'hui, nous passerons en revue les résultats du trimestre.", 'Commençons par les ventes en Europe.'],
+};
+
 const wss = new WebSocketServer({ server, path: '/transcribe-websocket' });
 
 wss.on('connection', (socket, req) => {
@@ -39,14 +46,18 @@ wss.on('connection', (socket, req) => {
     target = config.translation.target_language;
     console.log('config:', text);
     timer = setInterval(() => {
+      const original = SENTENCES.original[count % 3];
+      const translated = (SENTENCES[target] ?? SENTENCES.en)[count % 3];
       count += 1;
-      socket.send(JSON.stringify({ tokens: [{ text: `Frase ${count} en curso`, is_final: false, translation_status: 'original' }] }));
+      socket.send(JSON.stringify({ tokens: [{ text: original.slice(0, 18), is_final: false, translation_status: 'original' }] }));
       socket.send(
         JSON.stringify({
           tokens: [
-            { text: `Frase ${count}.`, is_final: true, translation_status: 'original' },
-            { text: `[${target}] Sentence ${count}.`, is_final: true, translation_status: 'translation' },
+            { text: original + ' ', is_final: true, translation_status: 'original' },
+            { text: translated + ' ', is_final: true, translation_status: 'translation' },
             { text: '<end>', is_final: true },
+            { text: 'Y ahora vamos a', is_final: false, translation_status: 'original' },
+            { text: 'And now we', is_final: false, translation_status: 'translation' },
           ],
         }),
       );

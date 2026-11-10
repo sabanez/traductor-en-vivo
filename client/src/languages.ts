@@ -1,14 +1,12 @@
 export interface Language {
-  /** Código de traducción de Azure (en, es, ...). */
+  /** Código ISO del idioma (es, en, de, fr). */
   code: string;
-  /** Locale de reconocimiento de voz de Azure (en-US, es-ES, ...). */
-  locale: string;
   name: string;
 }
 
 export const LANGUAGES: Language[] = [
-  { code: 'es', locale: 'es-ES', name: 'Español' },
-  { code: 'en', locale: 'en-US', name: 'English' },
-  { code: 'de', locale: 'de-DE', name: 'Deutsch' },
-  { code: 'fr', locale: 'fr-FR', name: 'Français' },
+  { code: 'es', name: 'Español' },
+  { code: 'en', name: 'English' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'fr', name: 'Français' },
 ];
