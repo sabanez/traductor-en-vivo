@@ -30,8 +30,8 @@ server.on('upgrade', (req, socket, head) => {
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
-/** WAV con un tono corto: hace de voz generada (su duración crece con el texto). */
-function toneWav(text: string): Buffer {
+/** PCM de 16 bits con un tono: hace de voz generada (su duración crece con el texto). */
+function tonePcm(text: string): Buffer {
   const rate = 24000;
   const samples = Math.min(rate * 3, Math.round(rate * 0.04 * text.length));
   const data = Buffer.alloc(samples * 2);
@@ -39,20 +39,7 @@ function toneWav(text: string): Buffer {
     const fade = Math.min(1, i / 600, (samples - i) / 600);
     data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 6000 * fade), i * 2);
   }
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + data.length, 4);
-  header.write('WAVEfmt ', 8);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(rate, 24);
-  header.writeUInt32LE(rate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(data.length, 40);
-  return Buffer.concat([header, data]);
+  return data;
 }
 
 ttsWss.on('connection', (socket, req) => {
@@ -61,20 +48,31 @@ ttsWss.on('connection', (socket, req) => {
     socket.close();
     return;
   }
-  let config: { stream_id: string; language: string; voice: string } | undefined;
+  console.log('voz: conexión nueva');
+  const configs = new Map<string, { language: string; voice: string; audio_format: string }>();
   socket.on('message', (data) => {
     const message = JSON.parse(data.toString());
-    if (!config) {
-      config = message;
+    const streamId = message.stream_id as string;
+    if (!configs.has(streamId)) {
+      configs.set(streamId, message);
       return;
     }
-    console.log(`voz ${config.voice} (${config.language}): ${message.text}`);
-    const wav = toneWav(message.text);
-    const half = Math.floor(wav.length / 2);
-    for (const [part, end] of [[wav.subarray(0, half), false], [wav.subarray(half), true]] as const) {
-      socket.send(JSON.stringify({ audio: part.toString('base64'), audio_end: end, stream_id: config.stream_id }));
-    }
-    socket.send(JSON.stringify({ terminated: true, stream_id: config.stream_id }));
+    const config = configs.get(streamId)!;
+    configs.delete(streamId);
+    console.log(`voz ${config.voice} (${config.language}, ${config.audio_format}): ${message.text}`);
+    // Se envía a trozos, como Soniox, con un primer trozo rápido.
+    const pcm = tonePcm(message.text);
+    const size = 9601; // impar a propósito, para probar trozos que parten una muestra
+    let offset = 0;
+    const sendNext = () => {
+      const part = pcm.subarray(offset, offset + size);
+      offset += size;
+      const last = offset >= pcm.length;
+      socket.send(JSON.stringify({ audio: part.toString('base64'), audio_end: last, stream_id: streamId }));
+      if (last) socket.send(JSON.stringify({ terminated: true, stream_id: streamId }));
+      else setTimeout(sendNext, 60);
+    };
+    setTimeout(sendNext, 80);
   });
 });
 

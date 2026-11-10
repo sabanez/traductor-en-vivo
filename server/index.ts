@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type RequestHandler } from 'express';
 import { getOrCreateRoom, handleUpgrade, roomAudio } from './rooms';
-import { parseVoices, Tts, TtsError } from './tts';
+import { parseVoices, Tts, TTS_SAMPLE_RATE } from './tts';
 
 const { SONIOX_API_KEY, SONIOX_REGION = 'eu', PORT = '3001', ACCESS_PASSWORD } = process.env;
 
@@ -92,12 +92,32 @@ app.post('/api/tts', async (req, res) => {
     res.status(404).json({ error: 'Frase no encontrada en la sala' });
     return;
   }
-  try {
-    res.type('audio/mpeg').set('Cache-Control', 'no-store').send(await audio);
-  } catch (error) {
-    if (!(error instanceof TtsError && error.status === 503)) console.error('No se pudo generar la voz:', error);
-    res.status(error instanceof TtsError ? error.status : 502).json({ error: 'No se pudo generar la voz' });
-  }
+  // El audio se envía a trozos según llega de Soniox, para que empiece a sonar antes.
+  let sent = 0;
+  const flush = () => {
+    if (sent === 0 && audio.chunks.length > 0) {
+      res.status(200).set({
+        'Content-Type': 'application/octet-stream',
+        'X-Sample-Rate': String(TTS_SAMPLE_RATE),
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+    }
+    while (sent < audio.chunks.length) res.write(audio.chunks[sent++]);
+    if (!audio.done) return;
+    unsubscribe();
+    if (sent > 0) {
+      res.end();
+      return;
+    }
+    const error = audio.error;
+    if (!(error?.status === 503)) console.error('No se pudo generar la voz:', error?.message);
+    res.status(error?.status ?? 502).json({ error: 'No se pudo generar la voz' });
+  };
+  const unsubscribe = audio.subscribe(flush);
+  res.on('close', unsubscribe);
+  flush();
 });
 
 if (process.env.NODE_ENV === 'production') {

@@ -68,9 +68,138 @@ let audioContext: AudioContext | null = null;
 let soniox = true;
 let failures = 0;
 // Frases pedidas en orden; se reproducen en ese orden aunque lleguen desordenadas.
-let queue: Array<Promise<AudioBuffer | null>> = [];
+let queue: Clip[] = [];
 let playing = false;
-let currentSource: AudioBufferSourceNode | null = null;
+// Momento (en el reloj del AudioContext) en que acaba lo ya programado.
+let nextTime = 0;
+const sources = new Set<AudioBufferSourceNode>();
+// Cambia al silenciar o cambiar de idioma, para cortar la frase que se esté reproduciendo.
+let generation = 0;
+
+/** Audio de una frase que llega a trozos desde el servidor (PCM de 16 bits, mono). */
+class Clip {
+  private readonly parts: AudioBuffer[] = [];
+  private done = false;
+  private wake: (() => void) | null = null;
+  failed = false;
+
+  constructor(
+    code: string,
+    sentence: string,
+    private readonly context: AudioContext,
+  ) {
+    void this.load(code, sentence);
+  }
+
+  private async load(code: string, sentence: string): Promise<void> {
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: roomId, language: code, text: sentence }),
+      });
+      if (response.status === 503 && (await response.clone().text()).includes('desactivada')) soniox = false;
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+      const rate = Number(response.headers.get('X-Sample-Rate') ?? '24000');
+      const reader = response.body.getReader();
+      let carry: Uint8Array | null = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        let bytes = value;
+        if (carry) {
+          bytes = new Uint8Array(carry.length + value.length);
+          bytes.set(carry);
+          bytes.set(value, carry.length);
+          carry = null;
+        }
+        // Un trozo puede partir una muestra de 2 bytes por la mitad: se guarda para el siguiente.
+        if (bytes.length % 2) {
+          carry = bytes.slice(-1);
+          bytes = bytes.subarray(0, -1);
+        }
+        if (bytes.length === 0) continue;
+        const samples = new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length));
+        const buffer = this.context.createBuffer(1, samples.length, rate);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
+        this.parts.push(buffer);
+        this.notify();
+      }
+      failures = 0;
+    } catch (error) {
+      console.warn('Voz de Soniox no disponible:', error);
+      this.failed = true;
+      failures += 1;
+      if (failures >= MAX_FAILURES) {
+        soniox = false;
+        updateAudioNote();
+      }
+    } finally {
+      this.done = true;
+      this.notify();
+    }
+  }
+
+  private notify(): void {
+    this.wake?.();
+    this.wake = null;
+  }
+
+  async *buffers(): AsyncGenerator<AudioBuffer> {
+    let index = 0;
+    for (;;) {
+      while (index < this.parts.length) yield this.parts[index++];
+      if (this.done) return;
+      await new Promise<void>((resolve) => (this.wake = resolve));
+    }
+  }
+}
+
+function schedule(buffer: AudioBuffer): void {
+  const context = audioContext!;
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  // Un pequeño margen evita cortes si el trozo llega justo a tiempo.
+  const start = Math.max(nextTime, context.currentTime + 0.05);
+  source.start(start);
+  nextTime = start + buffer.duration;
+  sources.add(source);
+  source.onended = () => sources.delete(source);
+}
+
+/** Espera hasta poco antes de que acabe lo programado, para enlazar la frase siguiente sin hueco. */
+function untilAlmostDone(): Promise<void> {
+  const remaining = nextTime - (audioContext?.currentTime ?? 0) - 0.15;
+  return new Promise((resolve) => window.setTimeout(resolve, Math.max(0, remaining * 1000)));
+}
+
+async function playQueue(): Promise<void> {
+  if (playing) return;
+  playing = true;
+  while (queue.length > 0 && audioOn && audioContext) {
+    // Si hay más de dos frases esperando, el audio va atrasado: se salta a las últimas.
+    if (queue.length > 2) queue = queue.slice(-2);
+    const clip = queue.shift()!;
+    const current = generation;
+    for await (const buffer of clip.buffers()) {
+      if (!audioOn || !audioContext || current !== generation) break;
+      schedule(buffer);
+    }
+    await untilAlmostDone();
+  }
+  playing = false;
+}
+
+function stopAudio(): void {
+  generation += 1;
+  queue = [];
+  for (const source of sources) source.stop();
+  sources.clear();
+  nextTime = 0;
+  speechSynthesis.cancel();
+}
 
 function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   const voices = speechSynthesis.getVoices().filter((v) => v.lang.replace('_', '-').startsWith(lang.slice(0, 2)));
@@ -94,63 +223,12 @@ function speakWithBrowser(sentence: string, lang: string): void {
   speechSynthesis.speak(utterance);
 }
 
-async function fetchAudio(code: string, sentence: string): Promise<AudioBuffer | null> {
-  try {
-    const response = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ room: roomId, language: code, text: sentence }),
-    });
-    if (response.status === 503 && (await response.clone().text()).includes('desactivada')) soniox = false;
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const buffer = await audioContext!.decodeAudioData(await response.arrayBuffer());
-    failures = 0;
-    return buffer;
-  } catch (error) {
-    console.warn('Voz de Soniox no disponible:', error);
-    failures += 1;
-    if (failures >= MAX_FAILURES) {
-      soniox = false;
-      updateAudioNote();
-    }
-    return null;
-  }
-}
-
-async function playQueue(): Promise<void> {
-  if (playing) return;
-  playing = true;
-  while (queue.length > 0 && audioOn) {
-    // Si hay más de dos frases esperando, el audio va atrasado: se salta a las últimas.
-    if (queue.length > 2) queue = queue.slice(-2);
-    const buffer = await queue.shift()!;
-    if (!buffer || !audioOn || !audioContext) continue;
-    await new Promise<void>((resolve) => {
-      const source = audioContext!.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioContext!.destination);
-      source.onended = () => resolve();
-      currentSource = source;
-      source.start();
-    });
-    currentSource = null;
-  }
-  playing = false;
-}
-
-function stopAudio(): void {
-  queue = [];
-  currentSource?.stop();
-  currentSource = null;
-  speechSynthesis.cancel();
-}
-
 function speak(sentence: string): void {
   const code = languageSelect.value;
   const language = findLanguage(code);
   if (!audioOn || !language) return;
   if (soniox && audioContext) {
-    queue.push(fetchAudio(code, sentence));
+    queue.push(new Clip(code, sentence, audioContext));
     void playQueue();
   } else {
     speakWithBrowser(sentence, language.voice);

@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
+import type { AudioStream } from './tts';
 import type { AttendeeMessage, GlossaryEntry, PresenterMessage, ServerToPresenterMessage, TextUpdate } from '../shared/protocol';
 
 // Frases que se guardan por idioma para quien entra tarde a la sala.
@@ -25,7 +26,7 @@ interface Room {
   presenter: WebSocket | null;
   attendees: Set<WebSocket>;
   /** Audio ya generado (o en curso) por idioma y frase, compartido entre asistentes. */
-  audio: Map<string, Promise<Buffer>>;
+  audio: Map<string, AudioStream>;
   lastActivity: number;
 }
 
@@ -139,8 +140,8 @@ export function roomAudio(
   roomId: string,
   language: string,
   text: string,
-  generate: () => Promise<Buffer>,
-): Promise<Buffer> | null {
+  generate: () => AudioStream,
+): AudioStream | null {
   const room = rooms.get(roomId);
   if (!room || !(room.lines.get(language) ?? []).slice(-SPEAKABLE_LINES).includes(text)) return null;
   const cacheKey = `${language}\n${text}`;
@@ -148,7 +149,12 @@ export function roomAudio(
   if (!audio) {
     audio = generate();
     // Si falla se olvida, para que otro asistente pueda volver a intentarlo.
-    audio.catch(() => room.audio.delete(cacheKey));
+    const stream = audio;
+    const forget = stream.subscribe(() => {
+      if (!stream.done) return;
+      forget();
+      if (stream.error && room.audio.get(cacheKey) === stream) room.audio.delete(cacheKey);
+    });
     room.audio.set(cacheKey, audio);
     if (room.audio.size > MAX_AUDIO_CACHE) room.audio.delete(room.audio.keys().next().value!);
   }
