@@ -41,6 +41,10 @@ npm run dev
 
 Para producción: `npm run build` y luego `npm start`, que sirve la web en el puerto `PORT`.
 
+### VPS propio
+
+La instalación actual está en https://livetranslate.labolife.com. Dónde está cada cosa, cómo actualizar y cómo diagnosticar: [docs/despliegue-vps.md](docs/despliegue-vps.md).
+
 ### Publicarlo para pruebas (Render, gratis)
 
 1. Entra en [render.com](https://render.com) con tu cuenta de GitHub.
