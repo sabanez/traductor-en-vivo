@@ -1,6 +1,7 @@
 import { type AttendeeMessage, type GlossaryEntry, ORIGINAL } from '../../shared/protocol';
 import { findLanguage, LANGUAGES } from './languages';
 import { Transcript } from './transcript';
+import { openLoopbackChannel } from './loopback';
 
 const LANGUAGE_STORAGE_KEY = 'traductor-idioma';
 
@@ -236,6 +237,12 @@ function speak(sentence: string): void {
 }
 
 function updateAudioNote(): void {
+  if (blockedByCapture) {
+    audioNote.hidden = false;
+    audioNote.textContent =
+      'Voz desactivada en este ordenador: el ponente está traduciendo todo su audio y la voz se volvería a traducir. Escúchala en el móvil o con otro dispositivo.';
+    return;
+  }
   const language = findLanguage(languageSelect.value);
   const browserVoice = audioOn && language && !soniox;
   const missingVoice = browserVoice && speechSynthesis.getVoices().length > 0 && !pickVoice(language.voice);
@@ -247,8 +254,8 @@ function updateAudioNote(): void {
       : 'La voz natural no está disponible: se usa la voz del dispositivo.';
 }
 
-audioButton.addEventListener('click', () => {
-  audioOn = !audioOn;
+function setAudio(on: boolean): void {
+  audioOn = on;
   audioButton.setAttribute('aria-pressed', String(audioOn));
   audioButton.classList.toggle('on', audioOn);
   audioLabel.textContent = audioOn ? 'Silenciar' : 'Escuchar';
@@ -260,9 +267,23 @@ audioButton.addEventListener('click', () => {
     stopAudio();
   }
   updateAudioNote();
-});
+}
+
+audioButton.addEventListener('click', () => setAudio(!audioOn));
 languageSelect.addEventListener('change', updateAudioNote);
 speechSynthesis.addEventListener('voiceschanged', updateAudioNote);
+
+// Si el ponente capta el audio de todo este ordenador (pantalla entera con audio del
+// sistema), la voz que suene aquí acabaría otra vez en la traducción: se apaga mientras dure.
+let blockedByCapture = false;
+const loopback = openLoopbackChannel((message) => {
+  if (message.type !== 'capturing' || message.active === blockedByCapture) return;
+  blockedByCapture = message.active;
+  audioButton.disabled = blockedByCapture;
+  if (blockedByCapture && audioOn) setAudio(false);
+  updateAudioNote();
+});
+loopback?.postMessage({ type: 'query' });
 
 // --- Glosario del ponente ---
 

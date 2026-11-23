@@ -38,7 +38,14 @@
 
       <section class="controls" aria-label="Configuración">
         <label class="field">
-          <span class="field-label">Idioma del ponente</span>
+          <span class="field-label">Fuente de audio</span>
+          <select id="audio-source">
+            <option value="microphone">Micrófono</option>
+            <option value="computer">Audio del ordenador</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Idioma del audio</span>
           <select id="source-language"></select>
         </label>
         <label class="field">
@@ -47,6 +54,38 @@
         </label>
         <span class="controls-spacer"></span>
         <button id="toggle" class="primary" type="button">Empezar</button>
+        <div class="field-full source-help">
+          <p id="audio-source-hint" class="note source-hint" hidden></p>
+          <details id="computer-limits" class="limits" hidden>
+            <summary>Restricciones del audio del ordenador</summary>
+            <ul>
+              <li><strong>Navegador.</strong> Solo funciona en Chrome o Edge de escritorio. Firefox, Safari y los móviles no permiten capturar audio.</li>
+              <li><strong>Qué se puede capturar.</strong> El navegador solo da el audio a través de «compartir pantalla»:
+                <ul>
+                  <li>Una <em>pestaña</em> del navegador (YouTube, un webinar web…): funciona en Windows, Mac y Linux. Es la opción recomendada. Hay que dejar activada la opción de compartir también su audio.</li>
+                  <li>La <em>pantalla entera con el audio del sistema</em> (para aplicaciones como Zoom o Teams): solo en Windows y ChromeOS.</li>
+                  <li>En Mac lo fiable es abrir el webinar en el navegador y compartir esa pestaña.</li>
+                  <li>Compartir una <em>ventana</em> no incluye audio.</li>
+                </ul>
+              </li>
+              <li><strong>Bucle de la traducción.</strong> Al compartir la pantalla entera se capta todo lo que suena en este ordenador, también la voz de la traducción, que se volvería a traducir sin fin y gastaría saldo. Los auriculares no lo evitan: la captura coge el audio antes de que llegue a ellos.
+                <ul>
+                  <li>Las pestañas de asistente abiertas en este mismo navegador apagan su voz automáticamente mientras dure la captura.</li>
+                  <li>En otro navegador de este ordenador no se puede detectar: escucha la traducción en el móvil u otro dispositivo.</li>
+                  <li>Compartiendo solo la pestaña del vídeo no hay bucle.</li>
+                </ul>
+              </li>
+              <li><strong>Volumen.</strong> Si bajas el volumen dentro del reproductor del vídeo, también llega más bajo a la traducción. Para no oír el original, usa la casilla de abajo (solo con pestaña).</li>
+              <li><strong>Una sola fuente.</strong> No se mezclan micrófono y audio del ordenador: el micrófono recogería también lo que suena por los altavoces y saldrían frases duplicadas.</li>
+              <li><strong>Al dejar de compartir</strong> desde la barra del navegador, la traducción se detiene sola.</li>
+              <li><strong>Coste.</strong> El mismo que con el micrófono: se paga por minuto de audio, aunque sea música o silencio.</li>
+            </ul>
+          </details>
+          <label id="mute-original-field" class="check" hidden>
+            <input id="mute-original" type="checkbox" />
+            <span>No reproducir el original en este ordenador (solo al compartir una pestaña; se sigue traduciendo)</span>
+          </label>
+        </div>
         <label class="field field-full">
           <span class="field-label">Glosario <span class="field-hint">· un término por línea, con explicación opcional tras «:». Los asistentes lo ven y ayuda a reconocer las palabras.</span></span>
           <textarea id="glossary" rows="3" placeholder="Labolife: laboratorio que organiza la presentación&#10;micro-inmunoterapia: tratamiento con dosis muy bajas"></textarea>
