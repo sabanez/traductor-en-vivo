@@ -572,6 +572,41 @@ select:disabled {
   line-height: 1.45;
 }
 
+.limits {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.limits summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.limits > ul {
+  margin: 10px 0 2px;
+  padding-left: 18px;
+}
+
+.limits ul ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+.limits li + li {
+  margin-top: 4px;
+}
+
+.limits strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
 .note-error {
   color: var(--live);
 }

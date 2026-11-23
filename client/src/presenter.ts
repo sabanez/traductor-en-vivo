@@ -17,6 +17,7 @@ const AUDIO_SOURCE_STORAGE_KEY = 'traductor-fuente';
 
 const audioSourceSelect = document.querySelector<HTMLSelectElement>('#audio-source')!;
 const sourceHint = document.querySelector<HTMLParagraphElement>('#audio-source-hint')!;
+const computerLimits = document.querySelector<HTMLDetailsElement>('#computer-limits')!;
 const muteOriginalField = document.querySelector<HTMLLabelElement>('#mute-original-field')!;
 const muteOriginalInput = document.querySelector<HTMLInputElement>('#mute-original')!;
 const sourceSelect = document.querySelector<HTMLSelectElement>('#source-language')!;
@@ -81,6 +82,7 @@ function showSourceHint(): void {
   sourceHint.hidden = !computer;
   sourceHint.textContent = computerSupport.hint;
   sourceHint.classList.toggle('note-error', computer && !computerSupport.supported);
+  computerLimits.hidden = !computer;
   muteOriginalField.hidden = !computer || !computerSupport.supported;
   original.setTitle('ORIG', computer ? 'Original (audio del ordenador)' : 'Original');
 }
