@@ -38,7 +38,14 @@
 
       <section class="controls" aria-label="Configuración">
         <label class="field">
-          <span class="field-label">Idioma del ponente</span>
+          <span class="field-label">Fuente de audio</span>
+          <select id="audio-source">
+            <option value="microphone">Micrófono</option>
+            <option value="computer">Audio del ordenador</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Idioma del audio</span>
           <select id="source-language"></select>
         </label>
         <label class="field">
@@ -47,6 +54,13 @@
         </label>
         <span class="controls-spacer"></span>
         <button id="toggle" class="primary" type="button">Empezar</button>
+        <div class="field-full source-help">
+          <p id="audio-source-hint" class="note source-hint" hidden></p>
+          <label id="mute-original-field" class="check" hidden>
+            <input id="mute-original" type="checkbox" />
+            <span>No reproducir el original en este ordenador (solo al compartir una pestaña; se sigue traduciendo)</span>
+          </label>
+        </div>
         <label class="field field-full">
           <span class="field-label">Glosario <span class="field-hint">· un término por línea, con explicación opcional tras «:». Los asistentes lo ven y ayuda a reconocer las palabras.</span></span>
           <textarea id="glossary" rows="3" placeholder="Labolife: laboratorio que organiza la presentación&#10;micro-inmunoterapia: tratamiento con dosis muy bajas"></textarea>

@@ -85,7 +85,8 @@ export const sonioxProvider: TranslationProvider = {
     const context = new AudioContext();
     await context.audioWorklet.addModule('/pcm-worklet.js');
     const source = context.createMediaStreamSource(audio);
-    const worklet = new AudioWorkletNode(context, 'pcm-worklet');
+    // El audio del ordenador suele ser estéreo: el navegador lo mezcla a mono antes del worklet.
+    const worklet = new AudioWorkletNode(context, 'pcm-worklet', { channelCount: 1, channelCountMode: 'explicit' });
     worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
       for (const socket of sockets) {
         if (socket.readyState === WebSocket.OPEN) socket.send(event.data);

@@ -561,6 +561,37 @@ select:disabled {
   color: var(--text-soft);
 }
 
+/* Ayuda de la fuente de audio del ponente */
+
+.source-help:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.source-hint {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.note-error {
+  color: var(--live);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--text);
+}
+
 @media (max-width: 860px) {
   .panels {
     grid-template-columns: 1fr;

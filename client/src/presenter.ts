@@ -5,13 +5,20 @@ import { sonioxProvider } from './providers/soniox';
 import type { TranslationSession } from './providers/types';
 import { parseGlossary } from './glossary';
 import { Transcript } from './transcript';
+import { captureComputer, captureMicrophone, computerAudioSupport, type CapturedAudio, type SourceKind } from './audio-source';
+import { openLoopbackChannel } from './loopback';
 
 // Para cambiar de proveedor basta con cambiar esta línea.
 const provider = sonioxProvider;
 const AUTO = 'auto';
 const ROOM_STORAGE_KEY = 'traductor-sala';
 const GLOSSARY_STORAGE_KEY = 'traductor-glosario';
+const AUDIO_SOURCE_STORAGE_KEY = 'traductor-fuente';
 
+const audioSourceSelect = document.querySelector<HTMLSelectElement>('#audio-source')!;
+const sourceHint = document.querySelector<HTMLParagraphElement>('#audio-source-hint')!;
+const muteOriginalField = document.querySelector<HTMLLabelElement>('#mute-original-field')!;
+const muteOriginalInput = document.querySelector<HTMLInputElement>('#mute-original')!;
 const sourceSelect = document.querySelector<HTMLSelectElement>('#source-language')!;
 const previewSelect = document.querySelector<HTMLSelectElement>('#preview-language')!;
 const glossaryInput = document.querySelector<HTMLTextAreaElement>('#glossary')!;
@@ -27,7 +34,7 @@ const qrButton = document.querySelector<HTMLButtonElement>('#qr')!;
 const qrDialog = document.querySelector<HTMLDialogElement>('#qr-dialog')!;
 
 let session: TranslationSession | null = null;
-let microphone: MediaStream | null = null;
+let capture: CapturedAudio | null = null;
 let usageTimer: number | undefined;
 let startedAt = 0;
 let room: { id: string; key: string } | null = null;
@@ -58,6 +65,45 @@ function showPreview(): void {
 }
 previewSelect.addEventListener('change', showPreview);
 showPreview();
+
+// --- Fuente de audio: micrófono o lo que suena en el ordenador ---
+
+const computerSupport = computerAudioSupport();
+try {
+  const saved = localStorage.getItem(AUDIO_SOURCE_STORAGE_KEY);
+  if (saved === 'microphone' || saved === 'computer') audioSourceSelect.value = saved;
+} catch {
+  // Sin almacenamiento se empieza con el micrófono.
+}
+
+function showSourceHint(): void {
+  const computer = audioSourceSelect.value === 'computer';
+  sourceHint.hidden = !computer;
+  sourceHint.textContent = computerSupport.hint;
+  sourceHint.classList.toggle('note-error', computer && !computerSupport.supported);
+  muteOriginalField.hidden = !computer || !computerSupport.supported;
+  original.setTitle('ORIG', computer ? 'Original (audio del ordenador)' : 'Original');
+}
+audioSourceSelect.addEventListener('change', () => {
+  try {
+    localStorage.setItem(AUDIO_SOURCE_STORAGE_KEY, audioSourceSelect.value);
+  } catch {
+    // No pasa nada si no se puede recordar.
+  }
+  showSourceHint();
+});
+showSourceHint();
+
+// Las pestañas de asistente abiertas en este navegador preguntan si se está captando el
+// audio de todo el ordenador, para no reproducir la voz y que no se vuelva a traducir.
+let capturingSystemAudio = false;
+const loopback = openLoopbackChannel((message) => {
+  if (message.type === 'query') loopback?.postMessage({ type: 'capturing', active: capturingSystemAudio });
+});
+function announceSystemCapture(active: boolean): void {
+  capturingSystemAudio = active;
+  loopback?.postMessage({ type: 'capturing', active });
+}
 
 // --- Sala: enlace compartido y reparto del texto a los asistentes ---
 
@@ -171,6 +217,8 @@ function setStatus(text: string, running: boolean): void {
   toggleButton.textContent = running ? 'Detener' : 'Empezar';
   toggleButton.classList.toggle('stop', running);
   sourceSelect.disabled = running;
+  audioSourceSelect.disabled = running;
+  muteOriginalInput.disabled = running;
 }
 
 function updateUsage(): void {
@@ -184,11 +232,15 @@ async function start(): Promise<void> {
   setStatus('Conectando…', true);
 
   try {
-    microphone = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
+    // Se pide la captura lo primero: el navegador solo la permite justo después del clic.
+    const kind = audioSourceSelect.value as SourceKind;
+    if (kind === 'computer' && !computerSupport.supported) throw new Error(computerSupport.hint);
+    capture = kind === 'computer' ? await captureComputer(muteOriginalInput.checked) : await captureMicrophone();
+    capture.onEnded(() => void stop(kind === 'computer' ? 'Parado: se dejó de compartir' : 'Parado: micrófono desconectado'));
+    // Con la pantalla entera se capta todo lo que suena aquí, también la voz de la traducción.
+    if (capture.surface === 'monitor') announceSystemCapture(true);
     session = await provider.start(
-      microphone,
+      capture.audio,
       {
         sourceLanguage: source?.code ?? null,
         targetLanguages: LANGUAGES.filter((l) => l.code !== source?.code).map((l) => l.code),
@@ -201,7 +253,7 @@ async function start(): Promise<void> {
     startedAt = Date.now();
     updateUsage();
     usageTimer = window.setInterval(updateUsage, 5000);
-    setStatus('En directo', true);
+    setStatus(capture.surface === 'monitor' ? 'En directo · audio del sistema' : 'En directo', true);
     sendToRoom({ type: 'status', live: true });
   } catch (error) {
     console.error(error);
@@ -216,8 +268,9 @@ async function stop(message = 'Parado'): Promise<void> {
   const current = session;
   session = null;
   await current?.stop();
-  microphone?.getTracks().forEach((track) => track.stop());
-  microphone = null;
+  capture?.stop();
+  capture = null;
+  announceSystemCapture(false);
   setStatus(message, false);
   sendToRoom({ type: 'status', live: false });
 }
